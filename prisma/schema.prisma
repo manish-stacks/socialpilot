@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum SystemRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id              String            @id @default(cuid())
+  email           String            @unique
+  name            String
+  passwordHash    String
+  systemRole      SystemRole        @default(USER)
+  status          UserStatus        @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  memberships     WorkspaceMember[]
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  posts           Post[]
+  mediaAssets     MediaAsset[]
+  aiGenerations   AIGeneration[]
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Workspace {
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  timezone        String            @default("UTC")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  members         WorkspaceMember[]
+  invitations     Invitation[]
+  auditLogs       AuditLog[]
+  socialAccounts  SocialAccount[]
+  posts           Post[]
+  mediaAssets     MediaAsset[]
+  aiGenerations   AIGeneration[]
+  subscription    Subscription?
+  suspendedAt     DateTime?
+  suspendedReason String?           @db.VarChar(300)
+}
+
+model WorkspaceMember {
+  id          String     @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        MemberRole @default(VIEWER)
+  createdAt   DateTime   @default(now())
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String     @id @default(cuid())
+  workspaceId String
+  email       String
+  role        MemberRole @default(VIEWER)
+  tokenHash   String     @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime   @default(now())
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  actorId     String?
+  workspaceId String?
+  action      String
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  actor       User?      @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+enum Platform {
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  TIKTOK
+  YOUTUBE
+  X
+  MOCK
+}
+
+enum AccountStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
+enum PostStatus {
+  DRAFT
+  AWAITING_APPROVAL
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  PARTIALLY_PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum TargetStatus {
+  PENDING
+  QUEUED
+  PUBLISHING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  UNCERTAIN
+  CANCELLED
+}
+
+enum MediaStatus {
+  PENDING
+  READY
+}
+
+model SocialAccount {
+  id                   String        @id @default(cuid())
+  workspaceId          String
+  platform             Platform
+  externalId           String
+  displayName          String
+  status               AccountStatus @default(ACTIVE)
+  tokenExpiresAt       DateTime?
+  encryptedCredentials String?       @db.Text
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  workspace            Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  targets              PostTarget[]
+
+  @@unique([workspaceId, platform, externalId])
+}
+
+model Post {
+  id          String       @id @default(cuid())
+  workspaceId String
+  createdById String
+  caption     String       @db.Text
+  hashtags    Json
+  cta         String?      @db.VarChar(300)
+  status      PostStatus   @default(DRAFT)
+  scheduledAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  targets     PostTarget[]
+  media       PostMedia[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledAt])
+}
+
+model PostTarget {
+  id              String              @id @default(cuid())
+  postId          String
+  socialAccountId String
+  captionOverride String?             @db.Text
+  status          TargetStatus        @default(PENDING)
+  externalPostId  String?
+  errorMessage    String?             @db.VarChar(500)
+  publishedAt     DateTime?
+  generation      Int                 @default(0)
+  attempts        Int                 @default(0)
+  polls           Int                 @default(0)
+  stage           String?             @db.VarChar(20)
+  containerId     String?             @db.VarChar(100)
+  sendingAt       DateTime?
+  claimedAt       DateTime?
+  claimedBy       String?             @db.VarChar(60)
+  nextAttemptAt   DateTime?
+  attemptLog      PublishingAttempt[]
+  post            Post                @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount       @relation(fields: [socialAccountId], references: [id])
+
+  @@unique([postId, socialAccountId])
+  @@index([status])
+  @@index([externalPostId])
+  @@index([status, nextAttemptAt])
+}
+
+model MediaAsset {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  uploadedById String
+  key          String      @unique
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  status       MediaStatus @default(PENDING)
+  createdAt    DateTime    @default(now())
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+  posts        PostMedia[]
+
+  @@index([workspaceId, createdAt])
+}
+
+model PostMedia {
+  postId       String
+  mediaAssetId String
+  position     Int        @default(0)
+  post         Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id])
+
+  @@id([postId, mediaAssetId])
+}
+
+model AIGeneration {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  mode        String
+  prompt      String    @db.Text
+  output      Json
+  model       String
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model Plan {
+  id                String         @id @default(cuid())
+  code              String         @unique
+  name              String
+  priceCents        Int            @default(0)
+  aiCreditsPerMonth Int
+  maxAccounts       Int
+  active            Boolean        @default(true)
+  subscriptions     Subscription[]
+}
+
+model Subscription {
+  id               String    @id @default(cuid())
+  workspaceId      String    @unique
+  planId           String
+  status           String    @default("active")
+  currentPeriodEnd DateTime?
+  provider         String?
+  externalId       String?
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan             Plan      @relation(fields: [planId], references: [id])
+}
+
+model PublishingAttempt {
+  id           String     @id @default(cuid())
+  targetId     String
+  attemptNo    Int
+  startedAt    DateTime
+  finishedAt   DateTime?
+  outcome      String?    @db.VarChar(20)
+  providerCode String?    @db.VarChar(40)
+  httpStatus   Int?
+  message      String?    @db.VarChar(500)
+  target       PostTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId])
+}
+
+model OAuthState {
+  id          String    @id @default(cuid())
+  stateHash   String    @unique
+  workspaceId String
+  userId      String
+  platform    String    @db.VarChar(20)
+  payloadEnc  String?   @db.Text
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model SystemSetting {
+  key         String   @id @db.VarChar(80)
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
