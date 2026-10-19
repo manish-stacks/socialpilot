@@ -23,7 +23,7 @@ import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, envFilePath: ['.env', '../../.env'] }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, envFilePath: ['../../.env', '.env'] }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule, AuthModule, WorkspacesModule, BillingModule, PostsModule, AccountsModule,
     DashboardModule, AnalyticsModule, AiModule, MediaModule, QueueModule, MetaModule, SettingsModule, AdminModule,

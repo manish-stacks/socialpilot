@@ -84,3 +84,10 @@ describe('admin helpers', () => {
     expect(bucketByDay([new Date('2026-01-02T01:00Z'), new Date('2026-01-02T23:00Z'), new Date('2026-01-01T00:00Z')])).toEqual([{ date: '2026-01-01', count: 1 }, { date: '2026-01-02', count: 2 }]);
   });
 });
+
+describe('number settings', () => {
+  it('accepts a sane exchange rate and rejects junk', () => {
+    expect(validateSetting('usd_inr_rate', 86.5)).toBe(86.5);
+    for (const bad of [0, -1, 5000, '85', NaN]) expect(() => validateSetting('usd_inr_rate', bad as any)).toThrow();
+  });
+});

@@ -9,7 +9,7 @@ import { PublishingService } from './publishing.service';
 import { WorkerRunner } from './reconciler.service';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, envFilePath: ['.env', '../../.env'] }), PrismaModule, SettingsModule, QueueModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, envFilePath: ['../../.env', '.env'] }), PrismaModule, SettingsModule, QueueModule],
   providers: [MediaService, PublishingService, WorkerRunner],
 })
 export class WorkerModule {}

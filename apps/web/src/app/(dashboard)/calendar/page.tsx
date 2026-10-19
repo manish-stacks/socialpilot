@@ -2,6 +2,14 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  List,
+  Plus,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/lib/app-context';
 import { Account, PostItem, wsPath } from '@/lib/types';
@@ -11,60 +19,200 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/form';
 import { Badge } from '@/components/ui/badge';
 
-export default function Calendar() {
+export default function CalendarPage() {
   const { workspace } = useApp();
-  const tz = workspace?.timezone ?? 'UTC', id = workspace?.id;
-  const [cursor, setCursor] = useState(() => { const k = dayKey(new Date(), tz); return { y: +k.slice(0, 4), m: +k.slice(5, 7) - 1 }; });
-  const [platform, setPlatform] = useState(''), [account, setAccount] = useState('');
+  const tz = workspace?.timezone ?? 'UTC';
+  const id = workspace?.id;
+
+  const [cursor, setCursor] = useState(() => {
+    const k = dayKey(new Date(), tz);
+    return { y: +k.slice(0, 4), m: +k.slice(5, 7) - 1 };
+  });
+
+  const [platform, setPlatform] = useState('');
+  const [account, setAccount] = useState('');
+
   const first = new Date(Date.UTC(cursor.y, cursor.m, 1));
   const lead = (first.getUTCDay() + 6) % 7; // Monday-first
   const days = new Date(Date.UTC(cursor.y, cursor.m + 1, 0)).getUTCDate();
-  const from = new Date(Date.UTC(cursor.y, cursor.m, 1) - 86_400_000).toISOString(), to = new Date(Date.UTC(cursor.y, cursor.m + 1, 2)).toISOString();
-  const accounts = useQuery({ queryKey: ['accounts', id], queryFn: () => api<Account[]>(wsPath(id!, '/accounts')), enabled: !!id });
-  const posts = useQuery({ queryKey: ['posts', id, 'cal', from, platform], enabled: !!id,
-    queryFn: () => api<{ items: PostItem[] }>(wsPath(id!, `/posts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&pageSize=200${platform ? `&platform=${platform}` : ''}`)) });
+  const from = new Date(Date.UTC(cursor.y, cursor.m, 1) - 86_400_000).toISOString();
+  const to = new Date(Date.UTC(cursor.y, cursor.m + 1, 2)).toISOString();
+
+  const accounts = useQuery({
+    queryKey: ['accounts', id],
+    queryFn: () => api<Account[]>(wsPath(id!, '/accounts')),
+    enabled: !!id,
+  });
+
+  const posts = useQuery({
+    queryKey: ['posts', id, 'cal', from, platform],
+    enabled: !!id,
+    queryFn: () =>
+      api<{ items: PostItem[] }>(
+        wsPath(
+          id!,
+          `/posts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&pageSize=200${
+            platform ? `&platform=${platform}` : ''
+          }`
+        )
+      ),
+  });
+
   const byDay = useMemo(() => {
     const m: Record<string, PostItem[]> = {};
     for (const p of posts.data?.items ?? []) {
-      if (!p.scheduledAt || (account && !p.targets.some((t) => t.socialAccount.id === account))) continue;
+      if (!p.scheduledAt || (account && !p.targets.some((t) => t.socialAccount.id === account)))
+        continue;
       (m[dayKey(p.scheduledAt, tz)] ??= []).push(p);
     }
     return m;
   }, [posts.data, account, tz]);
+
   if (!workspace) return null;
-  const shift = (d: number) => setCursor(({ y, m }) => { const n = new Date(Date.UTC(y, m + d, 1)); return { y: n.getUTCFullYear(), m: n.getUTCMonth() }; });
+
+  const shift = (d: number) =>
+    setCursor(({ y, m }) => {
+      const n = new Date(Date.UTC(y, m + d, 1));
+      return { y: n.getUTCFullYear(), m: n.getUTCMonth() };
+    });
+
   const cells = Array.from({ length: Math.ceil((lead + days) / 7) * 7 }, (_, i) => i - lead + 1);
   const today = dayKey(new Date(), tz);
   const pad = (n: number) => String(n).padStart(2, '0');
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{first.toLocaleString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' })}</h1>
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            {first.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+          </h1>
+          <p className="mt-1 text-xs text-slate-500">
+            Times calculated in {tz}. Click any day box to draft a post scheduled for that date.
+          </p>
+        </div>
+
+        {/* Filter Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          <Select className="w-36" value={platform} onChange={(e) => setPlatform(e.target.value)}><option value="">All platforms</option>{['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'TIKTOK', 'YOUTUBE', 'X', 'MOCK'].map((p) => <option key={p}>{p}</option>)}</Select>
-          <Select className="w-44" value={account} onChange={(e) => setAccount(e.target.value)}><option value="">All accounts</option>{accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.displayName}</option>)}</Select>
-          <Button variant="outline" size="sm" onClick={() => shift(-1)}>←</Button><Button variant="outline" size="sm" onClick={() => shift(1)}>→</Button>
-          <Button variant="outline" size="sm" asChild><Link href="/posts">List view</Link></Button>
+          <Select
+            className="w-36 text-xs"
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+          >
+            <option value="">All Channels</option>
+            {['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'TIKTOK', 'YOUTUBE', 'X', 'MOCK'].map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            className="w-40 text-xs"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+          >
+            <option value="">All Profiles</option>
+            {accounts.data?.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.displayName}
+              </option>
+            ))}
+          </Select>
+
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-900">
+            <button
+              onClick={() => shift(-1)}
+              className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => shift(1)}
+              className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <Button variant="outline" size="sm" asChild className="h-8 text-xs">
+            <Link href="/posts">
+              <List className="h-3.5 w-3.5" />
+              <span>List View</span>
+            </Link>
+          </Button>
         </div>
       </div>
-      <p className="text-xs text-neutral-500">Times shown in {tz}. Click an empty day to start a post for it.</p>
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-neutral-200 bg-neutral-200 dark:border-neutral-800 dark:bg-neutral-800">
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="bg-neutral-50 p-2 text-center text-xs font-medium dark:bg-neutral-900">{d}</div>)}
-        {cells.map((n, i) => {
-          const inMonth = n >= 1 && n <= days, key = `${cursor.y}-${pad(cursor.m + 1)}-${pad(n)}`, list = inMonth ? byDay[key] ?? [] : [];
-          return (
-            <div key={i} className={cn('min-h-[104px] bg-white p-1.5 text-xs dark:bg-neutral-950', !inMonth && 'opacity-30')}>
-              {inMonth && (<>
-                <Link href={`/posts/new?date=${key}`} className={cn('mb-1 inline-block rounded px-1 hover:bg-neutral-100 dark:hover:bg-neutral-800', key === today && 'bg-indigo-600 text-white hover:bg-indigo-700')}>{n}</Link>
-                <div className="space-y-1">{list.slice(0, 3).map((p) => (
-                  <Link key={p.id} href={`/posts/${p.id}`} className="block truncate rounded bg-neutral-100 px-1 py-0.5 hover:bg-neutral-200 dark:bg-neutral-800" title={p.caption}>
-                    <span className={cn('mr-1 inline-block h-1.5 w-1.5 rounded-full', p.status === 'SCHEDULED' ? 'bg-blue-500' : p.status === 'DRAFT' ? 'bg-neutral-400' : p.status === 'FAILED' ? 'bg-red-500' : 'bg-green-500')} />{p.caption || '(no caption)'}</Link>))}
-                  {list.length > 3 && <div className="text-neutral-500">+{list.length - 3} more</div>}</div></>)}
-            </div>);
-        })}
+
+      {/* Calendar Grid */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-200 shadow-sm dark:border-slate-800/80 dark:bg-slate-800">
+        <div className="grid grid-cols-7 gap-px">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+            <div
+              key={d}
+              className="bg-slate-50 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:text-slate-400"
+            >
+              {d}
+            </div>
+          ))}
+          {cells.map((n, i) => {
+            const inMonth = n >= 1 && n <= days;
+            const key = `${cursor.y}-${pad(cursor.m + 1)}-${pad(n)}`;
+            const list = inMonth ? byDay[key] ?? [] : [];
+            const isToday = key === today;
+
+            return (
+              <div
+                key={i}
+                className={cn(
+                  'min-h-[115px] bg-white p-2 text-xs transition-colors dark:bg-slate-950',
+                  !inMonth && 'bg-slate-50/50 opacity-40 dark:bg-slate-900/40'
+                )}
+              >
+                {inMonth && (
+                  <>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <Link
+                        href={`/posts/new?date=${key}`}
+                        className={cn(
+                          'inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold transition',
+                          isToday
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                        )}
+                      >
+                        {n}
+                      </Link>
+                      {list.length > 0 && (
+                        <span className="text-[10px] font-bold text-slate-400">{list.length}</span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      {list.slice(0, 3).map((p) => (
+                        <Link
+                          key={p.id}
+                          href={`/posts/${p.id}`}
+                          className="group block truncate rounded-md border border-slate-100 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-700 hover:border-blue-400 hover:bg-blue-50/50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                          title={p.caption}
+                        >
+                          <span className="line-clamp-1">{p.caption || '(No caption)'}</span>
+                        </Link>
+                      ))}
+                      {list.length > 3 && (
+                        <div className="text-[10px] text-blue-600 font-semibold px-1">
+                          +{list.length - 3} more
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-      {posts.error && <p className="text-sm text-red-600">{(posts.error as Error).message}</p>}
-      <div className="flex gap-3 text-xs text-neutral-500"><span><Badge value="SCHEDULED" /> scheduled</span><span><Badge value="DRAFT" /> draft</span><span><Badge value="FAILED" /> failed</span></div>
     </div>
   );
 }

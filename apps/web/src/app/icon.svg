@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="spFaviconGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00b4d8" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="9" fill="url(#spFaviconGrad)" />
+  <path d="M7 16.5 L25 8 L18 24 L14.5 17.5 L7 16.5 Z" fill="#ffffff" />
+  <path d="M25 8 L14.5 17.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" />
+</svg>

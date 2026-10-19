@@ -14,7 +14,11 @@ export const monthStartUtc = () => { const d = new Date(); return new Date(Date.
 export class BillingService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
   async onModuleInit() {
-    for (const p of DEFAULT_PLANS) await this.prisma.plan.upsert({ where: { code: p.code }, update: {}, create: p });
+    try { for (const p of DEFAULT_PLANS) await this.prisma.plan.upsert({ where: { code: p.code }, update: {}, create: p }); }
+    catch (e) {
+      if (process.env.NODE_ENV === 'production') throw e;
+      console.error('[billing] Could not seed plans. Have you run `npm run db:migrate -- --name init`?'); // dev only: don't crash the API
+    }
   }
   plans() { return this.prisma.plan.findMany({ where: { active: true }, orderBy: { priceCents: 'asc' } }); }
 
